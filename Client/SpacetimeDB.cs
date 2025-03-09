@@ -3,47 +3,41 @@ using SpacetimeDB.Types;
 
 namespace Client;
 
-public static class SpacetimeDB
+public class SpacetimeDB
 {
 #if DEBUG
     private const string Host = "http://localhost:3000";
 #else
     private const string Host = "https://spacetime.enn3.ovh";
 #endif
+    private const string DbName = "n-chat";
 
-    private const string DbName = "n_chat";
+    private Identity? _localIdentity;
+    private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly Thread _thread;
+    private Action<DbConnection, Identity> _connectedCallback;
 
-    private static Identity? _localIdentity;
-
-    public static bool Initialized { get; private set; }
-    public static CancellationTokenSource? CancellationTokenSource { get; private set; }
-    public static Thread? Thread { get; private set; }
-    public static DbConnection? Connection { get; private set; }
-
-    public static void Init()
+    public SpacetimeDB(Action<DbConnection> callback, Action<DbConnection> tickCallback,
+        Action<DbConnection, Identity> connectedCallback)
     {
-        if (Initialized) return;
-
         AuthToken.Init(".spacetime_csharp_n_chat");
-        Connection = ConnectToDB();
-        RegisterCallbacks(Connection);
-        CancellationTokenSource = new CancellationTokenSource();
-        Thread = new Thread(() => ProcessThread(Connection, CancellationTokenSource.Token));
-        Thread.Start();
-        Initialized = true;
+        var connection = ConnectToDb();
+        _connectedCallback = connectedCallback;
+        callback(connection);
+        _cancellationTokenSource = new CancellationTokenSource();
+        _thread = new Thread(() => ProcessThread(connection, tickCallback, _cancellationTokenSource.Token));
+        _thread.Start();
     }
 
-    public static void Stop()
+    public void Stop()
     {
-        if (!Initialized) return;
-
-        CancellationTokenSource!.Cancel();
-        Thread!.Join();
+        _cancellationTokenSource.Cancel();
+        _thread.Join();
     }
 
-    private static DbConnection ConnectToDB()
+    private DbConnection ConnectToDb()
     {
-        var conn = DbConnection.Builder()
+        var connection = DbConnection.Builder()
             .WithUri(Host)
             .WithModuleName(DbName)
             .WithToken(AuthToken.Token)
@@ -51,14 +45,10 @@ public static class SpacetimeDB
             .OnConnectError(OnConnectError)
             .OnDisconnect(OnDisconnected)
             .Build();
-        return conn;
+        return connection;
     }
 
-    private static void RegisterCallbacks(DbConnection connection)
-    {
-    }
-
-    private static void ProcessThread(DbConnection conn, CancellationToken ct)
+    private static void ProcessThread(DbConnection conn, Action<DbConnection> tickCallback, CancellationToken ct)
     {
         try
         {
@@ -66,7 +56,7 @@ public static class SpacetimeDB
             while (!ct.IsCancellationRequested)
             {
                 conn.FrameTick();
-                // ProcessCommands(conn.Reducers);
+                tickCallback(conn);
                 Thread.Sleep(100);
             }
         }
@@ -76,18 +66,21 @@ public static class SpacetimeDB
         }
     }
 
-    private static void OnConnected(DbConnection connection, Identity identity, string authToken)
+    private void OnConnected(DbConnection connection, Identity identity, string authToken)
     {
         _localIdentity = identity;
         AuthToken.SaveToken(authToken);
+        Console.Write("Connected");
+        connection.Reducers.SetName($"User{Random.Shared.NextInt64(ushort.MaxValue)}");
+        _connectedCallback(connection, identity);
     }
 
-    private static void OnConnectError(Exception e)
+    private void OnConnectError(Exception e)
     {
         Console.Write($"Error while connecting: {e}");
     }
 
-    private static void OnDisconnected(DbConnection conn, Exception? e)
+    private void OnDisconnected(DbConnection conn, Exception? e)
     {
         Console.Write(e != null ? $"Disconnected abnormally: {e}" : "Disconnected normally.");
     }

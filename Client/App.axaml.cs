@@ -11,6 +11,7 @@ public class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        ViewLocator.Register<MainViewModel, MainView>();
     }
 
     public override void OnFrameworkInitializationCompleted()

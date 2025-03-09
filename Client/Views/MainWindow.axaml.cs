@@ -14,7 +14,7 @@ public partial class MainWindow : Window
         Closing += (sender, args) =>
         {
             if (DataContext is MainWindowViewModel mainWindowViewModel)
-                mainWindowViewModel.ContentViewModel.OnClose();
+                mainWindowViewModel.OnClose();
         };
     }
 }
