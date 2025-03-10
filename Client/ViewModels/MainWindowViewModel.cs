@@ -54,6 +54,14 @@ public class MainWindowViewModel : ViewModelBase
     /// <param name="connection">the db where to register callbacks</param>
     private void Callback(DbConnection connection)
     {
+        connection.Db.Member.OnInsert += (context, row) =>
+        {
+            if (row.UserId == context.Identity!)
+            {
+                var channel = context.Db.Channel.Iter().First(channel => row.ChannelId == channel.Id);
+                Channels.Add(new ChannelViewModel { Name = channel.Name, Id = channel.Id });
+            }
+        };
     }
 
     /// <summary>
