@@ -17,6 +17,8 @@ public class SpacetimeDB
     private readonly Thread _thread;
     private Action<DbConnection, Identity> _connectedCallback;
 
+    public string Username = null!;
+
     public SpacetimeDB(Action<DbConnection> callback, Action<DbConnection> tickCallback,
         Action<DbConnection, Identity> connectedCallback)
     {
@@ -70,8 +72,9 @@ public class SpacetimeDB
     {
         _localIdentity = identity;
         AuthToken.SaveToken(authToken);
-        Console.Write("Connected");
-        connection.Reducers.SetName($"User{Random.Shared.NextInt64(ushort.MaxValue)}");
+        Console.WriteLine("Connected");
+        Username = $"User{Random.Shared.NextInt64(ushort.MaxValue)}";
+        connection.Reducers.SetName(Username);
         _connectedCallback(connection, identity);
     }
 

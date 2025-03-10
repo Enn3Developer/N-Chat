@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void AddUserHandler(ReducerEventContext ctx, I128 channelId, SpacetimeDB.Identity userId);
+        public delegate void AddUserHandler(ReducerEventContext ctx, string channel, string userName);
         public event AddUserHandler? OnAddUser;
 
-        public void AddUser(I128 channelId, SpacetimeDB.Identity userId)
+        public void AddUser(string channel, string userName)
         {
-            conn.InternalCallReducer(new Reducer.AddUser(channelId, userId), this.SetCallReducerFlags.AddUserFlags);
+            conn.InternalCallReducer(new Reducer.AddUser(channel, userName), this.SetCallReducerFlags.AddUserFlags);
         }
 
         public bool InvokeAddUser(ReducerEventContext ctx, Reducer.AddUser args)
@@ -25,8 +25,8 @@ namespace SpacetimeDB.Types
             if (OnAddUser == null) return false;
             OnAddUser(
                 ctx,
-                args.ChannelId,
-                args.UserId
+                args.Channel,
+                args.UserName
             );
             return true;
         }
@@ -38,22 +38,24 @@ namespace SpacetimeDB.Types
         [DataContract]
         public sealed partial class AddUser : Reducer, IReducerArgs
         {
-            [DataMember(Name = "channel_id")]
-            public I128 ChannelId;
-            [DataMember(Name = "user_id")]
-            public SpacetimeDB.Identity UserId;
+            [DataMember(Name = "channel")]
+            public string Channel;
+            [DataMember(Name = "user_name")]
+            public string UserName;
 
             public AddUser(
-                I128 ChannelId,
-                SpacetimeDB.Identity UserId
+                string Channel,
+                string UserName
             )
             {
-                this.ChannelId = ChannelId;
-                this.UserId = UserId;
+                this.Channel = Channel;
+                this.UserName = UserName;
             }
 
             public AddUser()
             {
+                this.Channel = "";
+                this.UserName = "";
             }
 
             string IReducerArgs.ReducerName => "add_user";

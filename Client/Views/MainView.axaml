@@ -8,8 +8,20 @@
              Loaded="OnLoaded"
              x:DataType="viewModels:MainViewModel">
     <Panel>
+        <Rectangle Fill="DarkKhaki" Opacity="100" />
         <StackPanel Orientation="Horizontal">
-            <VirtualizingStackPanel Orientation="Vertical" MaxWidth="200"></VirtualizingStackPanel>
+            <ListBox ItemsSource="{CompiledBinding Channels}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Vertical" MaxWidth="200" MinWidth="200">
+                            <TextBlock Text="{CompiledBinding Name}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel>
+
+            </StackPanel>
         </StackPanel>
     </Panel>
 </UserControl>

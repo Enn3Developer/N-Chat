@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using DynamicData;
 using ReactiveUI;
 using SpacetimeDB.Types;
 
@@ -13,7 +15,7 @@ public class MainWindowViewModel : ViewModelBase
         private set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
-    public List<string> Channels { get; } = [];
+    public ObservableCollection<ChannelViewModel> Channels { get; private set; } = [];
 
     public SpacetimeDB? SpacetimeDb { get; private set; }
 
@@ -27,8 +29,21 @@ public class MainWindowViewModel : ViewModelBase
     {
         SpacetimeDb ??= new SpacetimeDB(Callback, TickCallback, (connection, identity) =>
         {
-            connection.SubscriptionBuilder().OnApplied(context => { }).Subscribe([
-                $"SELECT channel.id, channel.name FROM channel INNER JOIN member ON channel.id = member.channel_id WHERE member.user_id = {identity}"
+            connection.SubscriptionBuilder().OnApplied(context =>
+            {
+                Channels.AddRange(context.Db.Channel.Iter()
+                    .Join(context.Db.Member.Iter(), channel => channel.Id,
+                        member => member.ChannelId,
+                        (channel, member) => member.UserId == identity ? channel : null)
+                    .Where(channel => channel != null)
+                    .Select(channel => new ChannelViewModel { Name = channel!.Name, Id = channel.Id }));
+                foreach (var channelViewModel in Channels)
+                {
+                    Console.WriteLine(channelViewModel.Name);
+                }
+            }).Subscribe([
+                "SELECT * FROM channel",
+                "SELECT * FROM member",
             ]);
         });
     }

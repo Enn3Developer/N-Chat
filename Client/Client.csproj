@@ -8,6 +8,8 @@
         <LangVersion>preview</LangVersion>
         <PublishAot>true</PublishAot>
         <TrimMode>copyused</TrimMode>
+        <PublishSingleFile>true</PublishSingleFile>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     </PropertyGroup>
 
     <ItemGroup>

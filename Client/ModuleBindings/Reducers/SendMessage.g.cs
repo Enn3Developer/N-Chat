@@ -12,10 +12,10 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void SendMessageHandler(ReducerEventContext ctx, string text, I128 channel);
+        public delegate void SendMessageHandler(ReducerEventContext ctx, string text, string channel);
         public event SendMessageHandler? OnSendMessage;
 
-        public void SendMessage(string text, I128 channel)
+        public void SendMessage(string text, string channel)
         {
             conn.InternalCallReducer(new Reducer.SendMessage(text, channel), this.SetCallReducerFlags.SendMessageFlags);
         }
@@ -41,11 +41,11 @@ namespace SpacetimeDB.Types
             [DataMember(Name = "text")]
             public string Text;
             [DataMember(Name = "channel")]
-            public I128 Channel;
+            public string Channel;
 
             public SendMessage(
                 string Text,
-                I128 Channel
+                string Channel
             )
             {
                 this.Text = Text;
@@ -55,6 +55,7 @@ namespace SpacetimeDB.Types
             public SendMessage()
             {
                 this.Text = "";
+                this.Channel = "";
             }
 
             string IReducerArgs.ReducerName => "send_message";

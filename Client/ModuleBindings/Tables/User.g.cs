@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly IdUniqueIndex Id;
 
+            public sealed class NameUniqueIndex : UniqueIndexBase<string>
+            {
+                protected override string GetKey(User row) => row.Name;
+
+                public NameUniqueIndex(UserHandle table) : base(table) { }
+            }
+
+            public readonly NameUniqueIndex Name;
+
             internal UserHandle(DbConnection conn) : base(conn)
             {
                 Id = new(this);
+                Name = new(this);
             }
 
             protected override object GetPrimaryKey(User row) => row.Id;

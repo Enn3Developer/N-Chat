@@ -16,7 +16,7 @@ namespace SpacetimeDB.Types
         [DataMember(Name = "id")]
         public I128 Id;
         [DataMember(Name = "sender")]
-        public SpacetimeDB.Identity Sender;
+        public string Sender;
         [DataMember(Name = "channel_id")]
         public I128 ChannelId;
         [DataMember(Name = "sent")]
@@ -26,7 +26,7 @@ namespace SpacetimeDB.Types
 
         public Message(
             I128 Id,
-            SpacetimeDB.Identity Sender,
+            string Sender,
             I128 ChannelId,
             SpacetimeDB.Timestamp Sent,
             string Text
@@ -41,6 +41,7 @@ namespace SpacetimeDB.Types
 
         public Message()
         {
+            this.Sender = "";
             this.Text = "";
         }
     }

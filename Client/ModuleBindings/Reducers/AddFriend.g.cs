@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void AddFriendHandler(ReducerEventContext ctx, SpacetimeDB.Identity userId);
+        public delegate void AddFriendHandler(ReducerEventContext ctx, string userName);
         public event AddFriendHandler? OnAddFriend;
 
-        public void AddFriend(SpacetimeDB.Identity userId)
+        public void AddFriend(string userName)
         {
-            conn.InternalCallReducer(new Reducer.AddFriend(userId), this.SetCallReducerFlags.AddFriendFlags);
+            conn.InternalCallReducer(new Reducer.AddFriend(userName), this.SetCallReducerFlags.AddFriendFlags);
         }
 
         public bool InvokeAddFriend(ReducerEventContext ctx, Reducer.AddFriend args)
@@ -25,7 +25,7 @@ namespace SpacetimeDB.Types
             if (OnAddFriend == null) return false;
             OnAddFriend(
                 ctx,
-                args.UserId
+                args.UserName
             );
             return true;
         }
@@ -37,16 +37,17 @@ namespace SpacetimeDB.Types
         [DataContract]
         public sealed partial class AddFriend : Reducer, IReducerArgs
         {
-            [DataMember(Name = "user_id")]
-            public SpacetimeDB.Identity UserId;
+            [DataMember(Name = "user_name")]
+            public string UserName;
 
-            public AddFriend(SpacetimeDB.Identity UserId)
+            public AddFriend(string UserName)
             {
-                this.UserId = UserId;
+                this.UserName = UserName;
             }
 
             public AddFriend()
             {
+                this.UserName = "";
             }
 
             string IReducerArgs.ReducerName => "add_friend";

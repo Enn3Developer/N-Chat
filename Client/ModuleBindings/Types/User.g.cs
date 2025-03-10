@@ -16,13 +16,13 @@ namespace SpacetimeDB.Types
         [DataMember(Name = "id")]
         public SpacetimeDB.Identity Id;
         [DataMember(Name = "name")]
-        public string? Name;
+        public string Name;
         [DataMember(Name = "online")]
         public bool Online;
 
         public User(
             SpacetimeDB.Identity Id,
-            string? Name,
+            string Name,
             bool Online
         )
         {
@@ -33,6 +33,7 @@ namespace SpacetimeDB.Types
 
         public User()
         {
+            this.Name = "";
         }
     }
 }
