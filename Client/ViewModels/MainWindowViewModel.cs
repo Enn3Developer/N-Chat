@@ -43,6 +43,7 @@ public class MainWindowViewModel : ViewModelBase
     /// <param name="connection">the db where to register callbacks</param>
     private void Callback(DbConnection connection)
     {
+        // Wait for an insert on Member to check if the member is this user, if yes add the channel
         connection.Db.Member.OnInsert += (context, row) =>
         {
             if (row.UserId == context.Identity!)
@@ -51,8 +52,11 @@ public class MainWindowViewModel : ViewModelBase
                 Channels.Add(new ChannelViewModel { Name = channel.Name, Id = channel.Id });
             }
         };
+
+        // Check the status of SetName
         connection.Reducers.OnSetName += (ctx, name) =>
         {
+            // We only check for failure now; in the future we can check for Committed, too
             if (ctx.Event.Status is Status.Failed failed)
             {
                 Console.Error.WriteLine($"Failed to set name: {failed.Failed_}");
