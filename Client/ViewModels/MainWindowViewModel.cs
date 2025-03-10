@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using DynamicData;
 using ReactiveUI;
+using SpacetimeDB;
 using SpacetimeDB.Types;
 
 namespace Client.ViewModels;
@@ -27,21 +28,9 @@ public class MainWindowViewModel : ViewModelBase
 
     public void InitSpacetimeDb()
     {
-        SpacetimeDb ??= new SpacetimeDB(Callback, TickCallback, (connection, identity) =>
+        SpacetimeDb ??= new SpacetimeDB(Callback, TickCallback, connection =>
         {
-            connection.SubscriptionBuilder().OnApplied(context =>
-            {
-                Channels.AddRange(context.Db.Channel.Iter()
-                    .Join(context.Db.Member.Iter(), channel => channel.Id,
-                        member => member.ChannelId,
-                        (channel, member) => member.UserId == identity ? channel : null)
-                    .Where(channel => channel != null)
-                    .Select(channel => new ChannelViewModel { Name = channel!.Name, Id = channel.Id }));
-                foreach (var channelViewModel in Channels)
-                {
-                    Console.WriteLine(channelViewModel.Name);
-                }
-            }).Subscribe([
+            connection.SubscriptionBuilder().OnApplied(_ => { }).Subscribe([
                 "SELECT * FROM channel",
                 "SELECT * FROM member",
             ]);
@@ -60,6 +49,13 @@ public class MainWindowViewModel : ViewModelBase
             {
                 var channel = context.Db.Channel.Iter().First(channel => row.ChannelId == channel.Id);
                 Channels.Add(new ChannelViewModel { Name = channel.Name, Id = channel.Id });
+            }
+        };
+        connection.Reducers.OnSetName += (ctx, name) =>
+        {
+            if (ctx.Event.Status is Status.Failed failed)
+            {
+                Console.Error.WriteLine($"Failed to set name: {failed.Failed_}");
             }
         };
     }

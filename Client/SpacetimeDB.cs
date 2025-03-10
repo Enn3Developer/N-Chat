@@ -15,12 +15,12 @@ public class SpacetimeDB
     private Identity? _localIdentity;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly Thread _thread;
-    private Action<DbConnection, Identity> _connectedCallback;
+    private readonly Action<DbConnection> _connectedCallback;
 
     public string Username = null!;
 
     public SpacetimeDB(Action<DbConnection> callback, Action<DbConnection> tickCallback,
-        Action<DbConnection, Identity> connectedCallback)
+        Action<DbConnection> connectedCallback)
     {
         AuthToken.Init(".spacetime_csharp_n_chat");
         var connection = ConnectToDb();
@@ -75,7 +75,7 @@ public class SpacetimeDB
         Console.WriteLine("Connected");
         Username = $"User{Random.Shared.NextInt64(ushort.MaxValue)}";
         connection.Reducers.SetName(Username);
-        _connectedCallback(connection, identity);
+        _connectedCallback(connection);
     }
 
     private void OnConnectError(Exception e)
