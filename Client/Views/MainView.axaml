@@ -9,18 +9,25 @@
              x:DataType="viewModels:MainViewModel">
     <Panel>
         <Rectangle Fill="DarkKhaki" Opacity="100" />
+        <!-- MAIN -->
         <StackPanel Orientation="Horizontal">
-            <ListBox ItemsSource="{CompiledBinding Channels}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Vertical" MaxWidth="200" MinWidth="200">
-                            <TextBlock Text="{CompiledBinding Name}" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            <StackPanel>
-
+            <!-- Left bar -->
+            <StackPanel Orientation="Vertical" MaxWidth="200" MinWidth="200">
+                <!-- Div channels -->
+                <Panel>
+                    <Rectangle Fill="DimGray" Opacity="100" />
+                    <!-- Channels -->
+                    <ListBox ItemsSource="{CompiledBinding Channels}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!-- Channel -->
+                                <StackPanel Orientation="Vertical" MaxWidth="200" MinWidth="200">
+                                    <TextBlock Text="{CompiledBinding Name}" Padding="10 5" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Panel>
             </StackPanel>
         </StackPanel>
     </Panel>

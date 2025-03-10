@@ -11,7 +11,7 @@ namespace SpacetimeDB.Types
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class Friend
+    public sealed partial class FriendRequest
     {
         [DataMember(Name = "hash")]
         public ulong Hash;
@@ -20,7 +20,7 @@ namespace SpacetimeDB.Types
         [DataMember(Name = "user_b")]
         public SpacetimeDB.Identity UserB;
 
-        public Friend(
+        public FriendRequest(
             ulong Hash,
             SpacetimeDB.Identity UserA,
             SpacetimeDB.Identity UserB
@@ -31,7 +31,7 @@ namespace SpacetimeDB.Types
             this.UserB = UserB;
         }
 
-        public Friend()
+        public FriendRequest()
         {
         }
     }

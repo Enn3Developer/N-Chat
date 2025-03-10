@@ -13,25 +13,25 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteTables
     {
-        public sealed class FriendHandle : RemoteTableHandle<EventContext, Friend>
+        public sealed class FriendRequestHandle : RemoteTableHandle<EventContext, FriendRequest>
         {
-            protected override string RemoteTableName => "friend";
+            protected override string RemoteTableName => "friend_request";
 
             public sealed class HashUniqueIndex : UniqueIndexBase<ulong>
             {
-                protected override ulong GetKey(Friend row) => row.Hash;
+                protected override ulong GetKey(FriendRequest row) => row.Hash;
 
-                public HashUniqueIndex(FriendHandle table) : base(table) { }
+                public HashUniqueIndex(FriendRequestHandle table) : base(table) { }
             }
 
             public readonly HashUniqueIndex Hash;
 
-            internal FriendHandle(DbConnection conn) : base(conn)
+            internal FriendRequestHandle(DbConnection conn) : base(conn)
             {
                 Hash = new(this);
             }
         }
 
-        public readonly FriendHandle Friend;
+        public readonly FriendRequestHandle FriendRequest;
     }
 }

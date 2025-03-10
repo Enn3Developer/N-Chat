@@ -22,6 +22,7 @@ namespace SpacetimeDB.Types
         {
             AddTable(Channel = new(conn));
             AddTable(Friend = new(conn));
+            AddTable(FriendRequest = new(conn));
             AddTable(Member = new(conn));
             AddTable(Message = new(conn));
             AddTable(User = new(conn));
@@ -433,6 +434,7 @@ namespace SpacetimeDB.Types
             var encodedArgs = update.ReducerCall.Args;
             return update.ReducerCall.ReducerName switch
             {
+                "accept_friend" => BSATNHelpers.Decode<Reducer.AcceptFriend>(encodedArgs),
                 "add_friend" => BSATNHelpers.Decode<Reducer.AddFriend>(encodedArgs),
                 "add_user" => BSATNHelpers.Decode<Reducer.AddUser>(encodedArgs),
                 "client_connected" => BSATNHelpers.Decode<Reducer.ClientConnected>(encodedArgs),
@@ -461,6 +463,7 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.AcceptFriend args => Reducers.InvokeAcceptFriend(eventContext, args),
                 Reducer.AddFriend args => Reducers.InvokeAddFriend(eventContext, args),
                 Reducer.AddUser args => Reducers.InvokeAddUser(eventContext, args),
                 Reducer.ClientConnected args => Reducers.InvokeClientConnected(eventContext, args),
