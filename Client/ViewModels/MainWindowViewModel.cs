@@ -48,10 +48,18 @@ public class MainWindowViewModel : ViewModelBase
         });
     }
 
+    /// <summary>
+    /// Callback for registering callbacks from the <see cref="DbConnection"/>
+    /// </summary>
+    /// <param name="connection">the db where to register callbacks</param>
     private void Callback(DbConnection connection)
     {
     }
 
+    /// <summary>
+    /// Callback where to use reducers from the <see cref="DbConnection"/>
+    /// </summary>
+    /// <param name="connection">the db where to use reducers</param>
     private void TickCallback(DbConnection connection)
     {
     }
