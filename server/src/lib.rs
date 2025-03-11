@@ -228,38 +228,32 @@ pub fn add_friend(ctx: &ReducerContext, user_name: String) -> Result<(), String>
         .find(user_name)
         .ok_or("No user found")?;
 
-    // we compute the hashes of the user ids and use that has the unique id
+    // default ordering of the ids
+    let id_a = ctx.sender.min(user_b.id);
+    let id_b = ctx.sender.max(user_b.id);
+
+    // we compute the hash of the user ids and use that has the unique id
     // this way we avoid to iterate through each row and the database can optimize its access
     let mut hasher = DefaultHasher::new();
-    ctx.sender.hash(&mut hasher);
-    user_b.id.hash(&mut hasher);
-    let hash_a = hasher.finish();
-
-    // we compute two hashes because the ordering changes the hash
-    let mut hasher = DefaultHasher::new();
-    user_b.id.hash(&mut hasher);
-    ctx.sender.hash(&mut hasher);
-    let hash_b = hasher.finish();
+    id_a.hash(&mut hasher);
+    id_b.hash(&mut hasher);
+    let hash = hasher.finish();
 
     // check if the user are already friends with each other
-    if ctx.db.friend().hash().find(hash_a).is_some()
-        || ctx.db.friend().hash().find(hash_b).is_some()
-    {
+    if ctx.db.friend().hash().find(hash).is_some() {
         return Err("Already a friend".into());
     }
 
     // check if the friendship was already requested
-    if ctx.db.friend_request().hash().find(hash_a).is_some()
-        || ctx.db.friend_request().hash().find(hash_b).is_some()
-    {
+    if ctx.db.friend_request().hash().find(hash).is_some() {
         return Err("Already requested friendship".into());
     }
 
     // add the request to the database
     ctx.db.friend_request().insert(FriendRequest {
-        hash: hash_a,
-        user_a: user_a.id,
-        user_b: user_b.id,
+        hash,
+        user_a: id_a,
+        user_b: id_b,
     });
 
     Ok(())
@@ -276,44 +270,33 @@ pub fn accept_friend(ctx: &ReducerContext, user_name: String) -> Result<(), Stri
         .find(user_name)
         .ok_or("No user found")?;
 
+    // default ordering of the ids
+    let id_a = ctx.sender.min(user_b.id);
+    let id_b = ctx.sender.max(user_b.id);
+
     // compute hashes
     let mut hasher = DefaultHasher::new();
-    ctx.sender.hash(&mut hasher);
-    user_b.id.hash(&mut hasher);
-    let hash_a = hasher.finish();
-
-    // we compute two hashes because the ordering changes the hash
-    let mut hasher = DefaultHasher::new();
-    user_b.id.hash(&mut hasher);
-    ctx.sender.hash(&mut hasher);
-    let hash_b = hasher.finish();
+    id_a.hash(&mut hasher);
+    id_b.hash(&mut hasher);
+    let hash = hasher.finish();
 
     // check if the user are already friends with each other
-    if ctx.db.friend().hash().find(hash_a).is_some()
-        || ctx.db.friend().hash().find(hash_b).is_some()
-    {
+    if ctx.db.friend().hash().find(hash).is_some() {
         return Err("Already a friend".into());
     }
 
-    // compute whether to use hash_a or hash_b
-    let is_not_a = ctx.db.friend_request().hash().find(hash_a).is_none();
-    let is_not_b = ctx.db.friend_request().hash().find(hash_b).is_none();
-
-    // if we can't use either hash_a or hash_b, then there's an error because the friendship wasn't requested
-    if is_not_a || is_not_b {
+    // check if the friendship request exists
+    if ctx.db.friend_request().hash().find(hash).is_none() {
         return Err("Friendship wasn't requested".into());
     }
-
-    // use the correct hash
-    let hash = if is_not_a { hash_b } else { hash_a };
 
     // remove the request
     ctx.db.friend_request().hash().delete(hash);
     // and add as friend
     ctx.db.friend().insert(Friend {
         hash,
-        user_a: user_a.id,
-        user_b: user_b.id,
+        user_a: id_a,
+        user_b: id_b,
     });
 
     Ok(())
