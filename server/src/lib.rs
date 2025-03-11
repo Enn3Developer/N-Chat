@@ -16,6 +16,7 @@ pub struct User {
     id: Identity,
     #[unique]
     name: String,
+    display_name: String,
     online: bool,
 }
 
@@ -109,11 +110,32 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
     } else {
         ctx.db.user().insert(User {
             id: ctx.sender,
-            name,
+            name: name.clone(),
+            // we set the display name as the id name because the user is newly created
+            display_name: name,
             // we set it to true because we assume the user is connected before it can use reducers
             online: true,
         });
     }
+
+    Ok(())
+}
+
+#[reducer]
+pub fn set_display_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
+    // validate the name
+    if !validate_name(&name) {
+        return Err("Name isn't valid".into());
+    }
+
+    // get the user
+    let user = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
+
+    // update its display name
+    ctx.db.user().insert(User {
+        display_name: name,
+        ..user
+    });
 
     Ok(())
 }
