@@ -92,6 +92,7 @@ pub struct GuildChannel {
     #[primary_key]
     #[auto_inc]
     id: i128,
+    guild_id: i128,
     name: String,
     created_at: Timestamp,
 }
@@ -131,6 +132,17 @@ pub struct GuildPermission {
 pub struct GuildMemberRole {
     user_id: Identity,
     role_id: i128,
+}
+
+#[table(name = guild_message, public)]
+pub struct GuildMessage {
+    #[primary_key]
+    #[auto_inc]
+    id: i128,
+    sender: String,
+    channel_id: i128,
+    sent: Timestamp,
+    text: String,
 }
 
 #[reducer(client_connected)]
@@ -811,7 +823,7 @@ pub fn remove_role_user(ctx: &ReducerContext, role_id: i128, user_name: String) 
 
     // check if the user is the owner of the guild
     if guild.owner != ctx.sender {
-        return Err("Only owner can add role to a user".into());
+        return Err("Only owner can remove role to a user".into());
     }
 
     // save the indexer
@@ -824,6 +836,138 @@ pub fn remove_role_user(ctx: &ReducerContext, role_id: i128, user_name: String) 
 
     // remove the role from the user
     index.delete((user.id, role_id));
+
+    Ok(())
+}
+
+#[reducer]
+pub fn create_guild_channel(ctx: &ReducerContext, guild_id: i128, name: String) -> ReducerResult {
+    // get the guild
+    let guild = ctx.db.guild().id().find(guild_id).ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can create a channel in the guild".into());
+    }
+
+    // create the channel
+    ctx.db.guild_channel().insert(GuildChannel {
+        id: 0,
+        guild_id,
+        name,
+        created_at: ctx.timestamp,
+    });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn delete_guild_channel(ctx: &ReducerContext, channel_id: i128) -> ReducerResult {
+    // get the channel
+    let channel = ctx
+        .db
+        .guild_channel()
+        .id()
+        .find(channel_id)
+        .ok_or("No channel found")?;
+
+    // get the guild
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(channel.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can delete a channel in the guild".into());
+    }
+
+    // delete the channel
+    ctx.db.guild_channel().id().delete(channel_id);
+
+    Ok(())
+}
+
+pub fn send_guild_message(ctx: &ReducerContext, channel_id: i128, text: String) -> ReducerResult {
+    // get the user
+    let user = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
+
+    // get the channel
+    let channel = ctx
+        .db
+        .guild_channel()
+        .id()
+        .find(channel_id)
+        .ok_or("No channel found")?;
+
+    // get the guild
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(channel.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        // if he isn't
+        // get the role
+        let roles = ctx
+            .db
+            .guild_member_role()
+            .user_and_role()
+            .filter(ctx.sender);
+
+        // initialize the variable that holds the bool of whether we found the correct permission
+        let mut permission_found = false;
+
+        // for every role the user has
+        for role in roles {
+            // get the permissions of the role
+            let permissions = ctx.db.guild_permission().role().filter(role.role_id);
+
+            // check for every permission if it can write to the channel
+            if permissions
+                .filter(|permission| {
+                    if let Permission::Write(id) = permission.permission {
+                        id == channel_id
+                    } else {
+                        false
+                    }
+                })
+                .count()
+                > 0
+            {
+                // found at least one permission
+                permission_found = true;
+
+                // exit the loop of the roles
+                break;
+            }
+        }
+
+        // check if we found the permission
+        if !permission_found {
+            return Err("You don't have enough permission".into());
+        }
+    }
+
+    // validate the message
+    if !validate_message(&text) {
+        return Err("Message content isn't valid".into());
+    }
+
+    // add the message
+    ctx.db.guild_message().insert(GuildMessage {
+        // id is auto inc
+        id: 0,
+        sender: user.name,
+        channel_id,
+        sent: ctx.timestamp,
+        text,
+    });
 
     Ok(())
 }
