@@ -1,3 +1,8 @@
+//! Entry point of the module
+//!
+//! WARNING: When changing anything related to the public api, remember to regenerate the spacetime bindings for the client:
+//! `spacetime generate --lang csharp --out-dir Client/ModuleBindings --project-path server`
+
 mod validation;
 
 use crate::validation::{validate_message, validate_name};
