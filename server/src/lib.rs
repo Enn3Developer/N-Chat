@@ -3,11 +3,15 @@
 //! WARNING: When changing anything related to the public api, remember to regenerate the spacetime bindings for the client:
 //! `spacetime generate --lang csharp --out-dir Client/ModuleBindings --project-path server`
 
+mod types;
 mod validation;
 
+use crate::types::Permission;
 use crate::validation::{validate_message, validate_name};
-use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
+use spacetimedb::{reducer, table, Identity, RangedIndex, ReducerContext, Table, Timestamp};
 use std::hash::{DefaultHasher, Hash, Hasher};
+
+pub type ReducerResult = Result<(), String>;
 
 /// Defines a user
 #[table(name = user, public)]
@@ -18,6 +22,7 @@ pub struct User {
     name: String,
     display_name: String,
     online: bool,
+    created_at: Timestamp,
 }
 
 /// Defines a friendship relation between two users
@@ -37,7 +42,7 @@ pub struct FriendRequest {
     user_b: Identity,
 }
 
-/// Defines a channel that has a name
+/// Defines a channel that has a name and the owner whom is a member of the channel
 #[table(name = channel, public)]
 pub struct Channel {
     #[primary_key]
@@ -45,11 +50,15 @@ pub struct Channel {
     id: i128,
     #[unique]
     name: String,
+    created_at: Timestamp,
+    owner: Identity,
 }
 
 /// Defines a member, aka a user and which channel he's in
 #[table(name = member, public)]
 pub struct Member {
+    #[unique]
+    hash: u64,
     user_id: Identity,
     channel_id: i128,
 }
@@ -64,6 +73,64 @@ pub struct Message {
     channel_id: i128,
     sent: Timestamp,
     text: String,
+}
+
+/// Defines a guild that may contain channels and has a permission system and an owner whom is a member
+#[table(name = guild, public)]
+pub struct Guild {
+    #[primary_key]
+    #[auto_inc]
+    id: i128,
+    name: String,
+    created_at: Timestamp,
+    owner: Identity,
+}
+
+/// Defines a guild channel
+#[table(name = guild_channel, public)]
+pub struct GuildChannel {
+    #[primary_key]
+    #[auto_inc]
+    id: i128,
+    name: String,
+    created_at: Timestamp,
+}
+
+/// Defines a guild member
+#[table(name = guild_member, public, index(name = user_and_guild, btree(columns = [user_id, guild_id])))]
+pub struct GuildMember {
+    user_id: Identity,
+    guild_id: i128,
+}
+
+/// Defines a role in the guild that has a name and a color
+#[table(name = guild_role, public)]
+pub struct GuildRole {
+    #[primary_key]
+    #[auto_inc]
+    id: i128,
+    guild_id: i128,
+    name: String,
+    // we use 32 bits per color to enable clients to use 10-bit depth colors
+    // transparency is *not* supported
+    color: u32,
+}
+
+/// Defines a permission for a role
+#[table(name = guild_permission, public)]
+pub struct GuildPermission {
+    #[primary_key]
+    #[auto_inc]
+    id: i128,
+    role_id: i128,
+    permission: Permission,
+}
+
+/// Assigns a role to a member
+#[table(name = guild_member_role, public, index(name = user_and_role, btree(columns = [user_id, role_id])), index(name = role_and_user, btree(columns = [role_id, user_id])))]
+pub struct GuildMemberRole {
+    user_id: Identity,
+    role_id: i128,
 }
 
 #[reducer(client_connected)]
@@ -93,7 +160,7 @@ pub fn client_disconnected(ctx: &ReducerContext) {
 }
 
 #[reducer]
-pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
+pub fn set_name(ctx: &ReducerContext, name: String) -> ReducerResult {
     // validate the name
     if !validate_name(&name) {
         return Err("Name isn't valid".into());
@@ -115,6 +182,8 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
             display_name: name,
             // we set it to true because we assume the user is connected before it can use reducers
             online: true,
+            // we set `created_at` at the time of setting name because we don't have user data before this moment
+            created_at: ctx.timestamp,
         });
     }
 
@@ -122,7 +191,7 @@ pub fn set_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
 }
 
 #[reducer]
-pub fn set_display_name(ctx: &ReducerContext, name: String) -> Result<(), String> {
+pub fn set_display_name(ctx: &ReducerContext, name: String) -> ReducerResult {
     // validate the name
     if !validate_name(&name) {
         return Err("Name isn't valid".into());
@@ -141,7 +210,7 @@ pub fn set_display_name(ctx: &ReducerContext, name: String) -> Result<(), String
 }
 
 #[reducer]
-pub fn send_message(ctx: &ReducerContext, text: String, channel: String) -> Result<(), String> {
+pub fn send_message(ctx: &ReducerContext, text: String, channel: String) -> ReducerResult {
     // get the user
     let user = ctx
         .db
@@ -178,7 +247,7 @@ pub fn send_message(ctx: &ReducerContext, text: String, channel: String) -> Resu
 }
 
 #[reducer]
-pub fn create_channel(ctx: &ReducerContext, channel_name: String) -> Result<(), String> {
+pub fn create_channel(ctx: &ReducerContext, channel_name: String) -> ReducerResult {
     // get the user
     let user = ctx
         .db
@@ -201,10 +270,19 @@ pub fn create_channel(ctx: &ReducerContext, channel_name: String) -> Result<(), 
     let channel = ctx.db.channel().insert(Channel {
         id: 0,
         name: channel_name,
+        created_at: ctx.timestamp,
+        owner: ctx.sender,
     });
+
+    // compute the hash
+    let mut hasher = DefaultHasher::new();
+    user.id.hash(&mut hasher);
+    channel.id.hash(&mut hasher);
+    let hash = hasher.finish();
 
     // add the user as a member of the channel
     ctx.db.member().insert(Member {
+        hash,
         user_id: user.id,
         channel_id: channel.id,
     });
@@ -213,7 +291,7 @@ pub fn create_channel(ctx: &ReducerContext, channel_name: String) -> Result<(), 
 }
 
 #[reducer]
-pub fn add_user(ctx: &ReducerContext, channel: String, user_name: String) -> Result<(), String> {
+pub fn add_user(ctx: &ReducerContext, channel: String, user_name: String) -> ReducerResult {
     // get the channel
     let channel = ctx
         .db
@@ -221,6 +299,11 @@ pub fn add_user(ctx: &ReducerContext, channel: String, user_name: String) -> Res
         .name()
         .find(&channel)
         .ok_or("No channel found")?;
+
+    // check if the requesting user is a member of the channel
+    if ctx.db.user().id().find(ctx.sender).is_none() {
+        return Err("Not a member of the channel".into());
+    }
 
     // get the user
     let user = ctx
@@ -230,8 +313,20 @@ pub fn add_user(ctx: &ReducerContext, channel: String, user_name: String) -> Res
         .find(user_name)
         .ok_or("No user found")?;
 
+    // compute the hash
+    let mut hasher = DefaultHasher::new();
+    user.id.hash(&mut hasher);
+    channel.id.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // check if the user is already a member of the channel
+    if ctx.db.member().hash().find(hash).is_some() {
+        return Err("Already a member of the channel".into());
+    }
+
     // add the user as a member of the channel
     ctx.db.member().insert(Member {
+        hash,
         user_id: user.id,
         channel_id: channel.id,
     });
@@ -240,7 +335,66 @@ pub fn add_user(ctx: &ReducerContext, channel: String, user_name: String) -> Res
 }
 
 #[reducer]
-pub fn add_friend(ctx: &ReducerContext, user_name: String) -> Result<(), String> {
+pub fn remove_user(ctx: &ReducerContext, channel: String, user_name: String) -> ReducerResult {
+    // get the channel
+    let channel = ctx
+        .db
+        .channel()
+        .name()
+        .find(&channel)
+        .ok_or("No channel found")?;
+
+    // check if the requesting user is the owner of the channel
+    // if it is, it is assumed it is also a member of the channel
+    if channel.owner != ctx.sender {
+        return Err("Only the owner can remove a user".into());
+    }
+
+    // get the user
+    let user = ctx
+        .db
+        .user()
+        .name()
+        .find(user_name)
+        .ok_or("No user found")?;
+
+    // compute the hash
+    let mut hasher = DefaultHasher::new();
+    user.id.hash(&mut hasher);
+    channel.id.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // check if the user is a member of the channel
+    if ctx.db.member().hash().find(hash).is_none() {
+        return Err("The user is not a member of the channel".into());
+    }
+
+    // check if the requesting user is trying to remove itself
+    if user.id == ctx.sender {
+        let members = ctx
+            .db
+            .member()
+            .iter()
+            .filter(|member| member.channel_id == channel.id)
+            .count();
+
+        // check if there are more than one member in the channel
+        if members > 1 {
+            return Err("The owner need to transfer the ownership first before removing itself from the channel".into());
+        }
+
+        // remove channel because there are no more members in it
+        ctx.db.channel().id().delete(channel.id);
+    }
+
+    // remove the user
+    ctx.db.member().hash().delete(hash);
+
+    Ok(())
+}
+
+#[reducer]
+pub fn add_friend(ctx: &ReducerContext, user_name: String) -> ReducerResult {
     // get users
     let user_a = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
     let user_b = ctx
@@ -282,7 +436,7 @@ pub fn add_friend(ctx: &ReducerContext, user_name: String) -> Result<(), String>
 }
 
 #[reducer]
-pub fn accept_friend(ctx: &ReducerContext, user_name: String) -> Result<(), String> {
+pub fn accept_friend(ctx: &ReducerContext, user_name: String) -> ReducerResult {
     // get users
     let user_a = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
     let user_b = ctx
@@ -321,5 +475,183 @@ pub fn accept_friend(ctx: &ReducerContext, user_name: String) -> Result<(), Stri
         user_b: id_b,
     });
 
+    Ok(())
+}
+
+#[reducer]
+pub fn create_guild(ctx: &ReducerContext, name: String) -> ReducerResult {
+    // get the user
+    let user = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
+
+    // create the guild
+    let guild = ctx.db.guild().insert(Guild {
+        // the id is auto_inc so when committed it will change to the correct id and the returning
+        // value has the correct id
+        id: 0,
+        name,
+        owner: ctx.sender,
+        created_at: ctx.timestamp,
+    });
+
+    // add the user as a member of the guild
+    ctx.db.guild_member().insert(GuildMember {
+        user_id: ctx.sender,
+        guild_id: guild.id,
+    });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn join_guild(ctx: &ReducerContext, guild_id: i128) -> ReducerResult {
+    // get the user
+    let user = ctx.db.user().id().find(ctx.sender).ok_or("No user found")?;
+
+    // get the guild
+    let guild = ctx.db.guild().id().find(guild_id).ok_or("No guild found")?;
+
+    // check if user is already a member of the guild
+    if ctx
+        .db
+        .guild_member()
+        .user_and_guild()
+        .filter((ctx.sender, guild_id))
+        .count()
+        == 1
+    {
+        return Err("Already a member of the guild".into());
+    }
+
+    // add the user as a member
+    ctx.db.guild_member().insert(GuildMember {
+        user_id: ctx.sender,
+        guild_id,
+    });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn create_role(
+    ctx: &ReducerContext,
+    guild_id: i128,
+    name: String,
+    color: u32,
+) -> ReducerResult {
+    // get the guild
+    let guild = ctx.db.guild().id().find(guild_id).ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("You must be the owner".into());
+    }
+
+    // add the role
+    ctx.db.guild_role().insert(GuildRole {
+        id: 0,
+        guild_id,
+        name,
+        color,
+    });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn set_role_name(ctx: &ReducerContext, role_id: i128, name: String) -> ReducerResult {
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can change the role name".into());
+    }
+
+    // update the role
+    ctx.db.guild_role().insert(GuildRole { name, ..role });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn set_role_color(ctx: &ReducerContext, role_id: i128, color: u32) -> ReducerResult {
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can change the role color".into());
+    }
+
+    // update the role
+    ctx.db.guild_role().insert(GuildRole { color, ..role });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn remove_role(ctx: &ReducerContext, role_id: i128) -> ReducerResult {
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can remove a role".into());
+    }
+
+    // remove the role
+    ctx.db.guild_role().id().delete(role_id);
+
+    // remove all member roles linked to the role
+    ctx.db.guild_member_role().role_and_user().delete(role_id);
+
+    Ok(())
+}
+
+#[reducer]
+pub fn add_permission(
+    ctx: &ReducerContext,
+    role_id: i128,
+    permission: Permission,
+) -> ReducerResult {
     Ok(())
 }
