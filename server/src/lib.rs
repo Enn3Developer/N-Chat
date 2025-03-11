@@ -653,5 +653,33 @@ pub fn add_permission(
     role_id: i128,
     permission: Permission,
 ) -> ReducerResult {
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can add permissions to a role".into());
+    }
+
+    // add the permission
+    ctx.db.guild_permission().insert(GuildPermission {
+        id: 0,
+        role_id,
+        permission,
+    });
+
     Ok(())
 }
