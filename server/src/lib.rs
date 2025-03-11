@@ -117,7 +117,7 @@ pub struct GuildRole {
 }
 
 /// Defines a permission for a role
-#[table(name = guild_permission, public)]
+#[table(name = guild_permission, public, index(name = role, btree(columns = [role_id])))]
 pub struct GuildPermission {
     #[primary_key]
     #[auto_inc]
@@ -674,12 +674,156 @@ pub fn add_permission(
         return Err("Only owner can add permissions to a role".into());
     }
 
+    // check if there's already the same permission as the one currently adding
+    if ctx
+        .db
+        .guild_permission()
+        .role()
+        .filter(role_id)
+        .find(|guild_permission| guild_permission.permission == permission)
+        .is_some()
+    {
+        return Err("Permission already added".into());
+    }
+
     // add the permission
     ctx.db.guild_permission().insert(GuildPermission {
         id: 0,
         role_id,
         permission,
     });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn remove_permission(ctx: &ReducerContext, permission_id: i128) -> ReducerResult {
+    // get the permission
+    let permission = ctx
+        .db
+        .guild_permission()
+        .id()
+        .find(permission_id)
+        .ok_or("No permission found")?;
+
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(permission.role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can add permissions to a role".into());
+    }
+
+    ctx.db.guild_permission().id().delete(permission_id);
+
+    Ok(())
+}
+
+#[reducer]
+pub fn add_role_user(ctx: &ReducerContext, role_id: i128, user_name: String) -> ReducerResult {
+    // get the user
+    let user = ctx
+        .db
+        .user()
+        .name()
+        .find(user_name)
+        .ok_or("No user found")?;
+
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can add role to a user".into());
+    }
+
+    // check if user has the role
+    if ctx
+        .db
+        .guild_member_role()
+        .user_and_role()
+        .filter((user.id, role_id))
+        .count()
+        > 1
+    {
+        return Err("User has already the role".into());
+    }
+
+    ctx.db.guild_member_role().insert(GuildMemberRole {
+        user_id: user.id,
+        role_id,
+    });
+
+    Ok(())
+}
+
+#[reducer]
+pub fn remove_role_user(ctx: &ReducerContext, role_id: i128, user_name: String) -> ReducerResult {
+    // get the user
+    let user = ctx
+        .db
+        .user()
+        .name()
+        .find(user_name)
+        .ok_or("No user found")?;
+
+    // get the role
+    let role = ctx
+        .db
+        .guild_role()
+        .id()
+        .find(role_id)
+        .ok_or("No role found")?;
+
+    // get the guild where the role is defined
+    let guild = ctx
+        .db
+        .guild()
+        .id()
+        .find(role.guild_id)
+        .ok_or("No guild found")?;
+
+    // check if the user is the owner of the guild
+    if guild.owner != ctx.sender {
+        return Err("Only owner can add role to a user".into());
+    }
+
+    // save the indexer
+    let index = ctx.db.guild_member_role().user_and_role();
+
+    // check if user has the role
+    if index.filter((user.id, role_id)).count() == 0 {
+        return Err("User doesn't have the role".into());
+    }
+
+    // remove the role from the user
+    index.delete((user.id, role_id));
 
     Ok(())
 }

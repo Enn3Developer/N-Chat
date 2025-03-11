@@ -1,6 +1,6 @@
 use spacetimedb::{Identity, SpacetimeType};
 
-#[derive(SpacetimeType)]
+#[derive(SpacetimeType, PartialEq)]
 pub enum Permission {
     /// Read guild channel by id
     Read(i128),
